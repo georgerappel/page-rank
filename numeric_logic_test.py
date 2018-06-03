@@ -1,9 +1,10 @@
+#########################################################################
+# Numeric example implementation of the Page and Brin Page Rank Algorithm
+#
+
 import numpy as np
 
-
-
-maxIterations = 10
-
+maxIterations = 1
 nPages = 4
 
 # p = 0.05 >> 0.380 / 0.133 / 0.289 / 0.196
@@ -29,3 +30,4 @@ for i in range(maxIterations):
     pageRank = pageRankM @ pageRank
 
 print(pageRank)
+print("norma: ", np.sum(pageRank))
