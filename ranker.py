@@ -1,6 +1,7 @@
 import numpy as np
 
-FILE_PATH = "ufrj_scraper/links.csv"
+HOME_URL = "http://dcc.ufrj.br/"
+FILE_PATH = "ufrj_scraper/links_dcc_copia.csv"
 D_TYPE = float
 
 class Page:
@@ -40,15 +41,40 @@ def csv_to_pages():
         page = Page()
         for line in links_file:
             line_fields = line.split(",")
-            if page.url != line_fields[url_from].rstrip():
-                if page.url is not "":
+            current_url = line_fields[url_from].rstrip()
+            if page.url != current_url:
+
+                current_index = -1
+                previous_index = -1
+                for i in range(len(pages_array)):
+                    if pages_array[i].url == current_url:
+                        current_index = i
+                    if pages_array[i].url == page.url:
+                        previous_index = i
+
+                if page.url is not "" and previous_index == -1:
                     pages_array.append(page)
-                # page.print()
-                page = Page(line_fields[url_from].rstrip())
+                elif previous_index != -1:
+                    pages_array[previous_index] = page
+
+                if current_index == -1:
+                    page = Page(current_url)
+                else:
+                    page = pages_array[i]
 
             page.add_url(line_fields[url_to].rstrip())
+
         # Append last page element to the array
-        pages_array.append(page)
+        previous_index = -1
+        for i in range(len(pages_array)):
+            if pages_array[i].url == page.url:
+                previous_index = i
+
+        if previous_index == -1:
+            pages_array.append(page)
+        elif previous_index != -1:
+            pages_array[previous_index] = page
+
     return pages_array
 
 
@@ -62,34 +88,47 @@ def get_unique_links(pages):
                 urls.append(link)
     return urls
 
-
 def rank(a_matrix):
-    maxIterations = 10
-    matrix_size = len(transition_matrix[0])
+    maxIterations = 3
+    matrix_size = len(a_matrix[0])
 
     # p = 0.05 >> 0.380 / 0.133 / 0.289 / 0.196
     # p = 0.15 >> 0.368 / 0.141 / 0.288 / 0.202 (ideal acording to the author)
     # p = 0.50 >> 0.320 / 0.178 / 0.278 / 0.223
-    p = 0.15
+    p = 0.05
 
     v = np.full([matrix_size, 1], 1/matrix_size, D_TYPE)
-    print("V: ", v)
+    # print("V: ", v)
 
     B = (1 / matrix_size) * np.ones([matrix_size, matrix_size], D_TYPE)
 
-    #pageRankM = a_matrix
+    # pageRankM = a_matrix
     pageRankM = (1 - p) * a_matrix + p * B
 
     pageRank = pageRankM @ v
     for i in range(maxIterations):
         pageRank = pageRankM @ pageRank
+        print("Soma dos rankings ", i, ": ", np.sum(pageRank))
 
-    print(pageRank)
+    #print(pageRank)
     print("Soma dos rankings: ", np.sum(pageRank))
+    return pageRank
 
 
 pages_array = csv_to_pages()
 unique_links = get_unique_links(pages_array)
+for u_link in unique_links:
+    found = False
+    for page in pages_array:
+        if page.url == u_link:
+            found = True
+            break
+
+    if not found:
+        new_page = Page(u_link)
+        new_page.add_url(HOME_URL)
+        pages_array.append(new_page)
+
 transition_matrix = np.zeros([len(unique_links), len(unique_links)], D_TYPE)
 
 print("Creating adjacency matrix")
@@ -98,19 +137,23 @@ for page in pages_array:
     for link in page.links:
         transition_matrix[unique_links.index(link), column] = 1/len(page.links)
 print("Created adjacency matrix")
-
+np.savetxt('transicao', transition_matrix)
+# transition_matrix = transition_matrix.transpose()
 count_urls = 0
 for page in pages_array:
     count_urls = count_urls + len(page.links)
+    print(page.url)
 
-# test output
-# for i in range(0, 10):
-#     for j in range(0, 10):
-#         print(transition_matrix[i,j], " ", end="")
-#     print(unique_links[i], end="\n")
 
-#TODO it's not working :(
-rank(transition_matrix)
+page_rank = rank(transition_matrix)
+
+coluna_urls = np.matrix(unique_links).transpose()
+rank_and_url = np.hstack((page_rank, coluna_urls))
+
+with open('rank_url.txt', 'w') as outfile:
+    for i in range(rank_and_url.shape[0]):
+        outfile.write(rank_and_url[i, 0] + "\t" + rank_and_url[i, 1] + "\n")
+
 
 print("\n\nTotal pages: ", len(pages_array))
 print("Total links: ", count_urls)

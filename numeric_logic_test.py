@@ -4,7 +4,7 @@
 
 import numpy as np
 
-maxIterations = 1
+maxIterations = 10000
 nPages = 4
 
 # p = 0.05 >> 0.380 / 0.133 / 0.289 / 0.196
@@ -30,4 +30,4 @@ for i in range(maxIterations):
     pageRank = pageRankM @ pageRank
 
 print(pageRank)
-print("norma: ", np.sum(pageRank))
+print("total somado: ", np.sum(pageRank))
