@@ -89,16 +89,16 @@ def get_unique_links(pages):
     return urls
 
 def rank(a_matrix):
-    maxIterations = 3
+    maxIterations = 5
     matrix_size = len(a_matrix[0])
 
     # p = 0.05 >> 0.380 / 0.133 / 0.289 / 0.196
     # p = 0.15 >> 0.368 / 0.141 / 0.288 / 0.202 (ideal acording to the author)
     # p = 0.50 >> 0.320 / 0.178 / 0.278 / 0.223
-    p = 0.05
+    p = 0.15
 
     v = np.full([matrix_size, 1], 1/matrix_size, D_TYPE)
-    # print("V: ", v)
+    print("V: ", 1/matrix_size)
 
     B = (1 / matrix_size) * np.ones([matrix_size, matrix_size], D_TYPE)
 
@@ -108,7 +108,8 @@ def rank(a_matrix):
     pageRank = pageRankM @ v
     for i in range(maxIterations):
         pageRank = pageRankM @ pageRank
-        print("Soma dos rankings ", i, ": ", np.sum(pageRank))
+        print("Soma dos rankings ", i, ": ", np.sum(pageRank), end='')
+        print("  prm ", np.sum(pageRankM))
 
     #print(pageRank)
     print("Soma dos rankings: ", np.sum(pageRank))
@@ -138,22 +139,18 @@ for page in pages_array:
         transition_matrix[unique_links.index(link), column] = 1/len(page.links)
 print("Created adjacency matrix")
 np.savetxt('transicao', transition_matrix)
-# transition_matrix = transition_matrix.transpose()
+
 count_urls = 0
 for page in pages_array:
     count_urls = count_urls + len(page.links)
-    print(page.url)
-
 
 page_rank = rank(transition_matrix)
-
 coluna_urls = np.matrix(unique_links).transpose()
 rank_and_url = np.hstack((page_rank, coluna_urls))
 
-with open('rank_url.txt', 'w') as outfile:
+with open('ranks.txt', 'w') as outfile:
     for i in range(rank_and_url.shape[0]):
         outfile.write(rank_and_url[i, 0] + "\t" + rank_and_url[i, 1] + "\n")
-
 
 print("\n\nTotal pages: ", len(pages_array))
 print("Total links: ", count_urls)

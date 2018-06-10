@@ -7,8 +7,8 @@ from ufrj_scraper.items import UfrjScraperItem
 
 class DccufrjSpider(scrapy.Spider):
     name = 'dccufrj'
-    allowed_domains = ['fau.ufrj.br']
-    start_urls = ['http://www.fau.ufrj.br/']
+    allowed_domains = ['ufrj.br']
+    start_urls = ['http://ufrj.br/']
 
     custom_settings = {
         'DNS_TIMEOUT': 6,
