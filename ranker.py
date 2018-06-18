@@ -1,158 +1,139 @@
 import numpy as np
+import pandas as pd
 
+#####################
+#   CONFIGURATION   #
+#####################
+debug = True
 HOME_URL = "http://dcc.ufrj.br/"
-FILE_PATH = "ufrj_scraper/links_dcc_copia.csv"
-D_TYPE = float
+FILE_PATH = "example_urls.csv"
+D_TYPE = np.float128
 
-class Page:
-    url = ""
-    links = []
+csv_file = pd.read_csv(FILE_PATH, sep=',')
 
-    def __init__(self, url = ""):
-        self.url = url
-        self.links = []
+##################
+# Transforms the csv_file into a matrix
+def csv_to_transition_matrix():
+    unique_links = get_unique_links(csv_file.values)
 
-    def add_url(self, url):
-        self.links.append(url)
+    transition_matrix = np.zeros([len(unique_links), len(unique_links)], D_TYPE)
 
-    def print(self):
-        print("\n======")
-        print("URL: ", self.url)
-        for link in self.links:
-            print(".......", link)
-        print("====== total: ", len(self.links))
-        print("\n")
+    url_from = 0
+    url_to = 1
 
+    # trocar as colunas caso estejam na ordem invertida
+    for i in range(len(csv_file.columns)):
+        if csv_file.columns[i] == "url_to":
+            url_to = i
+            url_from = 1 - i
 
-def csv_to_pages():
-    pages_array = []
-    with open(FILE_PATH, "r") as links_file:
-        url_from = 0
-        url_to = 1
+    for line_fields in csv_file.values:
+        current_to = line_fields[url_to].rstrip()
+        current_from = line_fields[url_from].rstrip()
 
-        csv_header = next(links_file)
-        headers = csv_header.split(",")
+        if current_to == current_from:
+            # Discard loops
+            continue
 
-        # Switch columns in case the file is in a different pattern
-        if headers[0] == "url_to":
-            url_to = 0
-            url_from = 1
+        column = unique_links.index(current_from)
+        row = unique_links.index(current_to)
 
-        page = Page()
-        for line in links_file:
-            line_fields = line.split(",")
-            current_url = line_fields[url_from].rstrip()
-            if page.url != current_url:
+        transition_matrix[row, column] = 1.0
 
-                current_index = -1
-                previous_index = -1
-                for i in range(len(pages_array)):
-                    if pages_array[i].url == current_url:
-                        current_index = i
-                    if pages_array[i].url == page.url:
-                        previous_index = i
+    home_row = unique_links.index(HOME_URL)
+    sum_columns = np.sum(transition_matrix, axis=0)
 
-                if page.url is not "" and previous_index == -1:
-                    pages_array.append(page)
-                elif previous_index != -1:
-                    pages_array[previous_index] = page
+    for i in range(len(unique_links)):
+        if sum_columns[i] == 0.0:
+            transition_matrix[home_row, i] = 1.0
 
-                if current_index == -1:
-                    page = Page(current_url)
-                else:
-                    page = pages_array[i]
+    sum_columns = np.sum(transition_matrix, axis=0)
 
-            page.add_url(line_fields[url_to].rstrip())
+    for i in range(len(unique_links)):
+        n_elementos = sum_columns.item(i)
+        for j in range(len(unique_links)):
+            if transition_matrix[j, i] == 1:
+                transition_matrix[j, i] = 1.0 / n_elementos
 
-        # Append last page element to the array
-        previous_index = -1
-        for i in range(len(pages_array)):
-            if pages_array[i].url == page.url:
-                previous_index = i
-
-        if previous_index == -1:
-            pages_array.append(page)
-        elif previous_index != -1:
-            pages_array[previous_index] = page
-
-    return pages_array
+    return transition_matrix
 
 
-def get_unique_links(pages):
-    urls = []
-    for page in pages:
-        if page.url not in urls:
-            urls.append(page.url)
-        for link in page.links:
-            if link not in urls:
-                urls.append(link)
-    return urls
+# Receives a pandas matrix from the CSV file
+# Returns an array of each unique link found, either scraped our outgoing
+def get_unique_links(links_matrix):
+    unique_links = []
+    for row in links_matrix:
+        if row[0].rstrip() not in unique_links:
+            unique_links.append(row[0].rstrip())
+        if row[1].rstrip() not in unique_links:
+            unique_links.append(row[1].rstrip())
 
+    return unique_links
+
+
+# Ranks the transition matrix A
 def rank(a_matrix):
-    maxIterations = 5
+    if debug:
+        print("Begin ranking")
+
+    maxIterations = 100
+    p = 0.05
     matrix_size = len(a_matrix[0])
 
-    # p = 0.05 >> 0.380 / 0.133 / 0.289 / 0.196
-    # p = 0.15 >> 0.368 / 0.141 / 0.288 / 0.202 (ideal acording to the author)
-    # p = 0.50 >> 0.320 / 0.178 / 0.278 / 0.223
-    p = 0.15
+    v = np.full([matrix_size, 1], 1 / float(matrix_size), D_TYPE)
 
-    v = np.full([matrix_size, 1], 1/matrix_size, D_TYPE)
-    print("V: ", 1/matrix_size)
+    B = (1.0 / float(matrix_size)) * np.ones([matrix_size, matrix_size], D_TYPE)
 
-    B = (1 / matrix_size) * np.ones([matrix_size, matrix_size], D_TYPE)
+    # Page and Brin algorithm
+    pageRankM = (1.0 - p) * a_matrix + p * B
 
-    # pageRankM = a_matrix
-    pageRankM = (1 - p) * a_matrix + p * B
-
+    previous_sum = 0
     pageRank = pageRankM @ v
     for i in range(maxIterations):
         pageRank = pageRankM @ pageRank
-        print("Soma dos rankings ", i, ": ", np.sum(pageRank), end='')
-        print("  prm ", np.sum(pageRankM))
 
-    #print(pageRank)
-    print("Soma dos rankings: ", np.sum(pageRank))
+        if debug:
+            print("Rank sum at iteration ", i, ": ", np.sum(pageRank))
+
+        if abs(previous_sum - np.sum(pageRank)) < 0.000000000000000019:
+            break
+        else:
+            previous_sum = np.sum(pageRank)
+
+    print("Final converged sum (must be very close to one): ", np.sum(pageRank))
+
     return pageRank
 
 
-pages_array = csv_to_pages()
-unique_links = get_unique_links(pages_array)
-for u_link in unique_links:
-    found = False
-    for page in pages_array:
-        if page.url == u_link:
-            found = True
-            break
+#####################
+#   Start ranking   #
+#####################
+unique_links = get_unique_links(csv_file.values)
+transition = csv_to_transition_matrix()
+page_rank = rank(transition)
 
-    if not found:
-        new_page = Page(u_link)
-        new_page.add_url(HOME_URL)
-        pages_array.append(new_page)
+if debug:
+    print("\n\nTotal unique pages: ", len(transition[0]))
+    print("Total links: ", len(csv_file.values))
+    print("\n")
 
-transition_matrix = np.zeros([len(unique_links), len(unique_links)], D_TYPE)
+# Append links to its ranks (already in the right order)
+links_column = np.transpose(np.array([unique_links]))
+rank_per_page = np.append(page_rank, links_column, axis=1)
 
-print("Creating adjacency matrix")
-for page in pages_array:
-    column = unique_links.index(page.url)
-    for link in page.links:
-        transition_matrix[unique_links.index(link), column] = 1/len(page.links)
-print("Created adjacency matrix")
-np.savetxt('transicao', transition_matrix)
+# Create pandas dataframe from rank matrix
+pandas_rank = pd.DataFrame(rank_per_page)
 
-count_urls = 0
-for page in pages_array:
-    count_urls = count_urls + len(page.links)
+# Rename columns for exhibition
+pandas_rank.columns = ["Page Rank", "URL"]
 
-page_rank = rank(transition_matrix)
-coluna_urls = np.matrix(unique_links).transpose()
-rank_and_url = np.hstack((page_rank, coluna_urls))
+# Solve formating for page rank value
+pandas_rank['Page Rank'] = pandas_rank['Page Rank'].astype(D_TYPE)
 
-with open('ranks.txt', 'w') as outfile:
-    for i in range(rank_and_url.shape[0]):
-        outfile.write(rank_and_url[i, 0] + "\t" + rank_and_url[i, 1] + "\n")
+# Show best N pages ranked
+print(pandas_rank.sort_values("Page Rank", ascending=False).head(30))
 
-print("\n\nTotal pages: ", len(pages_array))
-print("Total links: ", count_urls)
-print("Unique links: ", len(unique_links))
+# Exports the rank-url matrix to a txt file
+pandas_rank.to_csv('ranks.txt', index=False)
+
 
